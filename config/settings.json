@@ -1,0 +1,31 @@
+{
+  "_readme": "Settings, paths and discovered rule thresholds. API key goes in FLEET_API_KEY, never here.",
+  "api_base_url": "https://storm-hackathon.vercel.app/api/v1",
+  "api_key_env": "FLEET_API_KEY",
+  "data_dir": "data",
+  "page_size": 1000,
+  "entities": [
+    "Yard",
+    "Vehicle",
+    "Device",
+    "DeviceAssignment",
+    "Driver",
+    "Route",
+    "StatusData",
+    "FaultData",
+    "ExceptionEvent",
+    "Trip",
+    "DutyStatusLog",
+    "Callout",
+    "DispatchAssignment",
+    "DispatchPlan",
+    "WorkOrder"
+  ],
+  "raw_dir": "data/raw",
+  "timezone": "America/Toronto",
+  "rules": {
+    "_note": "Thresholds are PLACEHOLDERS until discovered from data. Empty list = predict ok for every truck.",
+    "no_start": [],
+    "hydraulic": []
+  }
+}

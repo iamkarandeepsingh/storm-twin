@@ -75,6 +75,12 @@ def cmd_replay(a, cfg):
     inp = load_json(a.input)
     data = merge(load_raw(cfg), inp.get("records_since_your_data_ends"))
     res, w = engine.predict(data, cfg, inp["callout_local"], inp.get("weather"), truck_names(inp.get("trucks")))
+    missing = [k for k in ("weather_min_temp_c", "weather_snow_cm") if w.get(k) is None]
+    if missing and cfg.get("replay_missing_weather", "warn") == "error":
+        print(f"ERROR: required weather missing from input: {missing}. Output schema allows only ok/no_start/hydraulic, "
+              "so no output was written. Set replay_missing_weather to 'warn' in config/settings.json to write a best-effort file.",
+              file=sys.stderr)
+        sys.exit(2)
     write(a.output, {"persona": "maintenance", "trucks": {n: r["label"] for n, r in res.items()}})
     warn = wxmod.warnings(w)
     for m in warn:

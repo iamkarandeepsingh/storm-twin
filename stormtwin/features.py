@@ -42,8 +42,8 @@ class TruckIndex:
         self.workorders = {}
         for w in data.get("WorkOrder", []):
             if w.get("openedLocal"):
-                self.workorders.setdefault(w.get("vehicleName"), []).append(
-                    (local_to_utc(w["openedLocal"], tz), local_to_utc(w.get("closedLocal") or w["openedLocal"], tz), w))
+                closed = local_to_utc(w["closedLocal"], tz) if w.get("closedLocal") else None  # no closure = not completed
+                self.workorders.setdefault(w.get("vehicleName"), []).append((local_to_utc(w["openedLocal"], tz), closed, w))
         for v in self.workorders.values():
             v.sort(key=lambda x: x[0])
 
@@ -59,7 +59,7 @@ class TruckIndex:
     def features(self, truck, as_of):
         f = {"truck": truck}
         wos = [x for x in self.workorders.get(truck, []) if x[0] < as_of]
-        done = [x for x in wos if x[1] <= as_of]  # repairs only count once completed before the callout
+        done = [x for x in wos if x[1] is not None and x[1] <= as_of]  # repairs only count once completed before the callout
 
         # --- battery ---
         volts = self.series(truck, DIAG_V, as_of)

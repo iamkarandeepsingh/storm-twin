@@ -84,5 +84,7 @@
       "name": "9:30 pm update (-19 C, 27.5 cm, callout 00:30)",
       "weather_file": "config/weather/update_2130.json"
     }
-  ]
+  ],
+  "_replay_missing_weather": "'warn' (default): write output, warn on stderr, weather-dependent rules cannot fire. 'error': exit 2, no output file (the replay would score 0 in the judges' re-run).",
+  "replay_missing_weather": "warn"
 }

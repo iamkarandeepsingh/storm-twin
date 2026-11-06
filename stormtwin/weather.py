@@ -58,7 +58,7 @@ def _t(r):
 
 def summarize(weather, callout_local):
     w = weather or {}
-    out = {"weather_min_temp_c": None, "weather_snow_cm": None, "weather_source": None}
+    out = {"weather_min_temp_c": None, "weather_snow_cm": None, "weather_source": None, "weather_snow_estimated": False}
     if not isinstance(w, dict):
         return out
     # simple override form
@@ -100,7 +100,9 @@ def summarize(weather, callout_local):
         pr = [x for x in pr if isinstance(x, (int, float))]
         cold = out["weather_min_temp_c"] is not None and out["weather_min_temp_c"] <= 0
         if pr and cold:
+            # ESTIMATE, not observed snowfall: assumes ~10:1 snow-to-liquid ratio (1 mm water ~ 1 cm snow)
             out["weather_snow_cm"] = round(sum(pr), 1)
+            out["weather_snow_estimated"] = True
             out["weather_source"] = (out["weather_source"] or "") + "+snow_from_precip(1mm~1cm)"
     for k in ("weather_min_temp_c", "weather_snow_cm"):
         if out[k] is not None and not isinstance(out[k], (int, float)):
@@ -117,4 +119,6 @@ def warnings(summary):
         w.append("WARNING: no temperature found in weather input -> cold no-start rule cannot fire")
     if summary.get("weather_snow_cm") is None:
         w.append("WARNING: no snowfall found in weather input -> hydraulic rule cannot fire")
+    if summary.get("weather_snow_estimated"):
+        w.append("NOTE: snowfall estimated from precipitation (assumed 1 mm ~ 1 cm); not observed snowfall")
     return w

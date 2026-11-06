@@ -1,21 +1,25 @@
 # Storm Twin – Karandeep
 
-Persona: Maintenance lead
+Persona: **Maintenance lead**. Which trucks go out tonight, which get fixed first?
 
-## Run it (a judge must be able to do this from a fresh clone)
+## Run it (from a fresh clone; Python 3.10+, standard library only; pytest optional)
 
 ```bash
-# 1. install: Python 3.10+, standard library only (see requirements.txt)
-# 2. load: download the fleet API into data/raw/  (needs FLEET_API_KEY)
-python -m stormtwin fetch
-# 3. replay: offline from data/ (exact command in REPLAY_COMMAND)
-python -m stormtwin replay --input replay/input.json --output replay/output.json --explain replay/explain.json
+python -m stormtwin fetch          # 1. load: API -> data/raw/  (needs FLEET_API_KEY; already committed)
+python -m stormtwin backtest       # 2. score the discovered rules on last winter
+python -m stormtwin replay --input replay/input.json --output replay/output.json --explain replay/explain.json   # 3. replay (= REPLAY_COMMAND), offline
+python -m stormtwin whatif                                              # 4. tonight, bulletin weather
+python -m stormtwin whatif --weather config/weather/update_1415.json    #    2:15 forecast: new JSON file, no code change
+python -m stormtwin whatif --scenario scenarios/fix_priority_trucks.json  # repair what-if vs baseline
+python -m pytest -q
 ```
 
 ## How it works (5 lines max)
-1. `fetch` saves every API entity to `data/raw/<Entity>.json`.
-2. `replay` maps devices to trucks at callout time (DeviceAssignment), merges the input's day-before records.
-3. Builds per-truck features using only records before the callout (no leakage).
-4. Applies the rules in `config/settings.json` (thresholds found from last winter) -> ok / no_start / hydraulic.
+1. `data/raw/` = API snapshot; `data/weather/` = Environment Canada daily data (Toronto Pearson) for last winter.
+2. Telematics is mapped device -> truck with DeviceAssignment at reading time; only records before the callout are used.
+3. Per truck: evening battery resting voltage; PTO hours since last hydraulic service/repair (battery swap / hydraulic repair reset them).
+4. Rules + thresholds live in `config/settings.json`: no_start = V <= 12.24 and low <= -10.5 C; hydraulic = PTO-since-service >= 181 h and snow >= 8 cm.
+5. Backtest on 11 callouts: 9/9 failures caught, 0 false alarms (327 truck-nights). Details in PERSONA.md.
 
 ## What I'd do next
+Hourly temperatures at start-up time (the Dec 31 vs Jan 18 cold-threshold ambiguity); a repair-capacity limit in scenarios.

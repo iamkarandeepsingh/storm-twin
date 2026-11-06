@@ -1,0 +1,2 @@
+{"description": "Forecast change example: low -9 C and only 6 cm (edit numbers; no code change)",
+ "weather_override": {"weather_min_temp_c": -9, "weather_snow_cm": 6}}

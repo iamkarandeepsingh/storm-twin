@@ -1,26 +1,19 @@
-"""Per-truck feature extraction as of a decision time.
+"""Per-truck feature extraction as of a decision time (the callout).
 
-PROVISIONAL: row field names below follow API_DOCS (device.id, diagnostic.id, dateTime) but the value
-field ("data" vs "value") and WorkOrder shape must be confirmed against data/raw once fetched.
 Only records strictly before `as_of_utc` are used (no time leakage).
+Telematics rows are keyed by device; they are mapped to trucks with DeviceAssignment at the reading time
+(devices b3B/b46 were swapped between T-118 and T-129 on 2026-01-08).
 """
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 DIAG_V = "DiagnosticBatteryRestingVoltageId"
 DIAG_PTO = "DiagnosticPtoHoursId"
-DIAG_ENG = "DiagnosticEngineHoursId"
+HYD_TYPES = ("HYDRAULIC_SERVICE", "HYDRAULIC_REPAIR")
 
 
 def _id(x):
     return x.get("id") if isinstance(x, dict) else x
-
-
-def _val(row):
-    for k in ("data", "value"):
-        if k in row:
-            return row[k]
-    return None
 
 
 def parse_utc(s):
@@ -31,45 +24,72 @@ def local_to_utc(s, tz):
     return datetime.fromisoformat(s).replace(tzinfo=ZoneInfo(tz)).astimezone(timezone.utc)
 
 
-def device_for_truck(assignments, as_of_utc):
-    """Map truck name -> device id active at as_of_utc, using DeviceAssignment.activeFrom."""
-    current = {}
-    for a in sorted(assignments, key=lambda a: a.get("activeFrom", "")):
-        if parse_utc(a["activeFrom"]) <= as_of_utc:
-            veh = a.get("vehicleName") or _id(a.get("vehicle"))
-            dev = _id(a.get("device")) or a.get("deviceId")
-            # one device per vehicle: drop any older mapping of this device to another truck
-            for k in [k for k, v in current.items() if v == dev]:
-                del current[k]
-            current[veh] = dev
-    return current
+class TruckIndex:
+    """Pre-indexes merged API rows by truck so features are cheap to compute for many dates."""
 
+    def __init__(self, data, tz):
+        self.tz = tz
+        self.assign = [(a["device"]["id"], a.get("vehicleName"), parse_utc(a["activeFrom"]),
+                        parse_utc(a.get("activeTo") or "2100-01-01T00:00:00Z")) for a in data.get("DeviceAssignment", [])]
+        self.status = {}
+        for r in data.get("StatusData", []):
+            t = parse_utc(r["dateTime"])
+            truck = self.truck_of(_id(r.get("device")), t)
+            if truck:
+                self.status.setdefault((truck, _id(r.get("diagnostic"))), []).append((t, r.get("data")))
+        for v in self.status.values():
+            v.sort(key=lambda x: x[0])
+        self.workorders = {}
+        for w in data.get("WorkOrder", []):
+            if w.get("openedLocal"):
+                self.workorders.setdefault(w.get("vehicleName"), []).append(
+                    (local_to_utc(w["openedLocal"], tz), local_to_utc(w.get("closedLocal") or w["openedLocal"], tz), w))
+        for v in self.workorders.values():
+            v.sort(key=lambda x: x[0])
 
-def truck_features(truck, dev, data, as_of_utc, tz):
-    status = [r for r in data.get("StatusData", []) if _id(r.get("device")) == dev and parse_utc(r["dateTime"]) < as_of_utc]
-    by_diag = {}
-    for r in sorted(status, key=lambda r: r["dateTime"]):
-        by_diag.setdefault(_id(r.get("diagnostic")), []).append((parse_utc(r["dateTime"]), _val(r)))
+    def truck_of(self, dev, t):
+        for d, truck, a, b in self.assign:
+            if d == dev and a <= t < b:
+                return truck
+        return None
 
-    f = {"truck": truck, "device": dev}
-    volts = by_diag.get(DIAG_V, [])
-    f["battery_v_latest"] = volts[-1][1] if volts else None
-    week = [v for t, v in volts if t >= as_of_utc - timedelta(days=7) and v is not None]
-    f["battery_v_min_7d"] = min(week) if week else None
-    f["battery_v_drop_7d"] = (week[0] - week[-1]) if len(week) >= 2 else None
+    def series(self, truck, diag, before):
+        return [(t, v) for t, v in self.status.get((truck, diag), []) if t < before and v is not None]
 
-    pto = by_diag.get(DIAG_PTO, [])
-    f["pto_hours_latest"] = pto[-1][1] if pto else None
+    def features(self, truck, as_of):
+        f = {"truck": truck}
+        wos = [x for x in self.workorders.get(truck, []) if x[0] < as_of]
 
-    faults = [r for r in data.get("FaultData", []) if _id(r.get("device")) == dev and parse_utc(r["dateTime"]) < as_of_utc]
-    recent = [r for r in faults if parse_utc(r["dateTime"]) >= as_of_utc - timedelta(days=14)]
-    f["faults_14d"] = len(recent)
-    f["fault_codes_14d"] = sorted({str(_id(r.get("diagnostic")) or r.get("code")) for r in recent})
+        # --- battery ---
+        volts = self.series(truck, DIAG_V, as_of)
+        if volts:
+            t_v, v = volts[-1]
+            f["battery_v_latest"] = v
+            f["battery_v_reading_local"] = t_v.astimezone(ZoneInfo(self.tz)).strftime("%Y-%m-%dT%H:%M")
+            replaced = [w for t, _, w in wos if w.get("type") == "BATTERY_REPLACED" and t > t_v]
+            if replaced:  # new battery after the last reading: old voltage no longer describes the truck
+                f["battery_replaced_after_reading"] = replaced[-1]["id"]
+                f["battery_v_latest"] = None
+        else:
+            f["battery_v_latest"] = None
 
-    wos = [w for w in data.get("WorkOrder", []) if (w.get("vehicleName") or w.get("truck")) == truck
-           and w.get("openedLocal") and local_to_utc(w["openedLocal"], tz) < as_of_utc]
-    for wtype, key in (("BATTERY_REPLACED", "days_since_battery"), ("HYDRAULIC_SERVICE", "days_since_hyd_service"),
-                       ("HYDRAULIC_REPAIR", "days_since_hyd_repair"), ("PM_INSPECTION", "days_since_pm")):
-        ts = [local_to_utc(w["openedLocal"], tz) for w in wos if w.get("type") == wtype]
-        f[key] = round((as_of_utc - max(ts)).total_seconds() / 86400, 1) if ts else None
-    return f
+        # --- hydraulics: PTO hours since last hydraulic service / repair ---
+        pto = self.series(truck, DIAG_PTO, as_of)
+        hyd = [(t, tc, w) for t, tc, w in wos if w.get("type") in HYD_TYPES]
+        f["pto_hours_latest"] = pto[-1][1] if pto else None
+        f["pto_since_hyd_service"] = None
+        if hyd:
+            t_open, t_close, w = hyd[-1]
+            f["last_hyd_work_order"] = w["id"]
+            base = (w.get("meterReadings") or {}).get("ptoHours")
+            if base is None:  # mechanic left meters blank: use first telematics reading after the job
+                after = [v for t, v in self.series(truck, DIAG_PTO, as_of) if t >= t_close]
+                base = after[0] if after else None
+                if base is None and pto and pto[-1][0] < t_open:
+                    base = pto[-1][1]  # serviced after the last reading
+            if base is not None and pto:
+                f["pto_since_hyd_service"] = round(max(0.0, pto[-1][1] - base), 1)
+
+        # --- context (reported, not used by the default rules) ---
+        f["road_calls_before"] = sum(1 for _, _, w in wos if w.get("type") == "ROAD_CALL")
+        return f

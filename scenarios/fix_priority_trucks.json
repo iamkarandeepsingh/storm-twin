@@ -1,0 +1,3 @@
+{"description": "Swap batteries on T-109, T-110, T-116 and service hydraulics on T-114, T-119 before callout (repairs assumed fully effective)",
+ "battery_replaced": ["T-109", "T-110", "T-116"],
+ "hydraulic_serviced": ["T-114", "T-119"]}

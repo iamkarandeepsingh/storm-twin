@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 TEMP_KEYS = ("temp_c", "temperature_c", "temperature_2m", "temperature", "temp", "air_temp_c")
 TMIN_KEYS = ("min_temp_c", "tmin_c", "temp_min_c", "temperature_2m_min", "min_temp", "low_c", "tmin", "min_c",
              "temperature_min", "temp_min", "low", "min_temperature_c", "min_temperature")
+PRECIP_KEYS = ("precip_mm", "precipitation_mm", "precipitation", "total_precip_mm", "precipitation_sum", "precip")
 SNOW_KEYS = ("snow_cm", "snowfall_cm", "total_snow_cm", "snowfall_sum", "snowfall", "snow", "new_snow_cm",
              "snow_total_cm", "total_snow", "snow_accumulation_cm")
 TIME_KEYS = ("time", "datetime", "date", "time_local", "local", "date_local", "datetime_local")
@@ -92,6 +93,21 @@ def summarize(weather, callout_local):
             snow = [_get(r, SNOW_KEYS) for r in same if _get(r, SNOW_KEYS) is not None]
             if snow:
                 out["weather_snow_cm"] = round(sum(snow), 1)
+    if out["weather_snow_cm"] is None and c is not None:
+        pr = [_get(r, PRECIP_KEYS) for r in hourly if _t(r) and c - timedelta(hours=6) <= _t(r) <= c + timedelta(hours=24)]
+        if not [x for x in pr if x is not None] and daily:
+            pr = [_get(r, PRECIP_KEYS) for r in daily if _t(r) and _t(r).date() == c.date()]
+        pr = [x for x in pr if isinstance(x, (int, float))]
+        cold = out["weather_min_temp_c"] is not None and out["weather_min_temp_c"] <= 0
+        if pr and cold:
+            out["weather_snow_cm"] = round(sum(pr), 1)
+            out["weather_source"] = (out["weather_source"] or "") + "+snow_from_precip(1mm~1cm)"
+    for k in ("weather_min_temp_c", "weather_snow_cm"):
+        if out[k] is not None and not isinstance(out[k], (int, float)):
+            try:
+                out[k] = float(out[k])
+            except (TypeError, ValueError):
+                out[k] = None
     return out
 
 

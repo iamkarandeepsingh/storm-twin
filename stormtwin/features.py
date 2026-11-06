@@ -59,6 +59,7 @@ class TruckIndex:
     def features(self, truck, as_of):
         f = {"truck": truck}
         wos = [x for x in self.workorders.get(truck, []) if x[0] < as_of]
+        done = [x for x in wos if x[1] <= as_of]  # repairs only count once completed before the callout
 
         # --- battery ---
         volts = self.series(truck, DIAG_V, as_of)
@@ -66,7 +67,7 @@ class TruckIndex:
             t_v, v = volts[-1]
             f["battery_v_latest"] = v
             f["battery_v_reading_local"] = t_v.astimezone(ZoneInfo(self.tz)).strftime("%Y-%m-%dT%H:%M")
-            replaced = [w for t, _, w in wos if w.get("type") == "BATTERY_REPLACED" and t > t_v]
+            replaced = [w for t, tc, w in done if w.get("type") == "BATTERY_REPLACED" and tc > t_v]
             if replaced:  # new battery after the last reading: old voltage no longer describes the truck
                 f["battery_replaced_after_reading"] = replaced[-1]["id"]
                 f["battery_v_latest"] = None
@@ -75,7 +76,7 @@ class TruckIndex:
 
         # --- hydraulics: PTO hours since last hydraulic service / repair ---
         pto = self.series(truck, DIAG_PTO, as_of)
-        hyd = [(t, tc, w) for t, tc, w in wos if w.get("type") in HYD_TYPES]
+        hyd = [(t, tc, w) for t, tc, w in done if w.get("type") in HYD_TYPES]
         f["pto_hours_latest"] = pto[-1][1] if pto else None
         f["pto_since_hyd_service"] = None
         if hyd:

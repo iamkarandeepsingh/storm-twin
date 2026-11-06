@@ -11,14 +11,18 @@ weather_snow_cm    : total snowfall for the storm (sum over the window / storm d
 from datetime import datetime, timedelta
 
 TEMP_KEYS = ("temp_c", "temperature_c", "temperature_2m", "temperature", "temp", "air_temp_c")
-TMIN_KEYS = ("min_temp_c", "tmin_c", "temp_min_c", "temperature_2m_min", "min_temp", "low_c", "tmin")
-SNOW_KEYS = ("snow_cm", "snowfall_cm", "total_snow_cm", "snowfall_sum", "snowfall", "snow")
+TMIN_KEYS = ("min_temp_c", "tmin_c", "temp_min_c", "temperature_2m_min", "min_temp", "low_c", "tmin", "min_c",
+             "temperature_min", "temp_min", "low", "min_temperature_c", "min_temperature")
+SNOW_KEYS = ("snow_cm", "snowfall_cm", "total_snow_cm", "snowfall_sum", "snowfall", "snow", "new_snow_cm",
+             "snow_total_cm", "total_snow", "snow_accumulation_cm")
 TIME_KEYS = ("time", "datetime", "date", "time_local", "local", "date_local", "datetime_local")
 
 
 def _records(block):
     if block is None:
         return []
+    if isinstance(block, dict) and block and all(isinstance(v, dict) for v in block.values()):
+        return [dict(v, date=v.get("date", k)) for k, v in block.items()]  # {"2026-01-15": {...}}
     if isinstance(block, list):
         return [r for r in block if isinstance(r, dict)]
     if isinstance(block, dict):
@@ -89,3 +93,12 @@ def summarize(weather, callout_local):
             if snow:
                 out["weather_snow_cm"] = round(sum(snow), 1)
     return out
+
+
+def warnings(summary):
+    w = []
+    if summary.get("weather_min_temp_c") is None:
+        w.append("WARNING: no temperature found in weather input -> cold no-start rule cannot fire")
+    if summary.get("weather_snow_cm") is None:
+        w.append("WARNING: no snowfall found in weather input -> hydraulic rule cannot fire")
+    return w

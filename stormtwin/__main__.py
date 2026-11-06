@@ -6,12 +6,13 @@
   python -m stormtwin whatif --weather config/weather/tonight.json [--scenario scenarios/x.json]
 """
 import argparse
+import sys
 import csv
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import engine, features
+from . import engine, features, report, weather as wxmod
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -75,8 +76,11 @@ def cmd_replay(a, cfg):
     data = merge(load_raw(cfg), inp.get("records_since_your_data_ends"))
     res, w = engine.predict(data, cfg, inp["callout_local"], inp.get("weather"), truck_names(inp.get("trucks")))
     write(a.output, {"persona": "maintenance", "trucks": {n: r["label"] for n, r in res.items()}})
+    warn = wxmod.warnings(w)
+    for m in warn:
+        print(m, file=sys.stderr)
     if a.explain:
-        write(a.explain, {"weather_used": w, "trucks": res})
+        write(a.explain, {"weather_used": w, "warnings": warn, "trucks": res})
     print(json.dumps({"weather_used": w, "counts": {k: sum(r["label"] == k for r in res.values()) for k in ("ok", "no_start", "hydraulic")}}))
 
 
@@ -147,8 +151,15 @@ def cmd_whatif(a, cfg):
     counts = {k: sum(r["label"] == k for r in res.values()) for k in ("ok", "no_start", "hydraulic")}
     print(f"ready={counts['ok']}  no_start={counts['no_start']}  hydraulic={counts['hydraulic']}  removed={len(base) - len(res)}")
     print(table(res, base if a.scenario else None))
+    for m in wxmod.warnings(w):
+        print(m)
     if a.out:
         write(a.out, {"callout_local": callout, "weather_used": w, "counts": counts, "trucks": res})
+    if a.report:
+        Path(a.report).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.report).write_text(report.render(callout, w, res, cfg, base if a.scenario else None,
+                                                sc if a.scenario else None), encoding="utf-8")
+        print(f"report written: {a.report}")
 
 
 def main(argv=None):
@@ -166,6 +177,7 @@ def main(argv=None):
     wp.add_argument("--scenario", help="scenario JSON: battery_replaced, hydraulic_serviced, removed, weather_override")
     wp.add_argument("--callout", help="callout local time (default from config)")
     wp.add_argument("--out", help="write full JSON result here")
+    wp.add_argument("--report", help="write a one-page Markdown report here")
     a = ap.parse_args(argv)
     cfg = load_json(a.config)
     if a.cmd == "fetch":

@@ -1,0 +1,21 @@
+{
+ "fetched_at_utc": "2026-11-06T18:32:12.208533+00:00",
+ "base_url": "https://storm-hackathon.vercel.app/api/v1",
+ "counts": {
+  "Yard": 2,
+  "Vehicle": 30,
+  "Device": 30,
+  "DeviceAssignment": 32,
+  "Driver": 48,
+  "Route": 40,
+  "StatusData": 8260,
+  "FaultData": 346,
+  "ExceptionEvent": 2277,
+  "Trip": 446,
+  "DutyStatusLog": 640,
+  "Callout": 11,
+  "DispatchAssignment": 446,
+  "DispatchPlan": 30,
+  "WorkOrder": 132
+ }
+}

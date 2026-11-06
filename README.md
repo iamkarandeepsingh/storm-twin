@@ -9,7 +9,7 @@ python -m stormtwin fetch          # 1. load: API -> data/raw/  (needs FLEET_API
 python -m stormtwin backtest       # 2. score the discovered rules on last winter
 python -m stormtwin replay --input replay/input.json --output replay/output.json --explain replay/explain.json   # 3. replay (= REPLAY_COMMAND), offline
 python -m stormtwin whatif --report reports/tonight_baseline.md        # 4. tonight, bulletin weather (+ one-page report)
-python -m stormtwin whatif --weather config/weather/update_1415.json    #    2:15 forecast: new JSON file, no code change
+python -m stormtwin whatif --weather config/weather/update_2130.json --callout 2026-12-16T00:30:00 --report reports/update_2130_baseline.md   # 2:15 forecast update: new JSON file, no code change
 python -m stormtwin whatif --scenario scenarios/fix_priority_trucks.json  # repair what-if vs baseline
 python -m pytest -q
 ```

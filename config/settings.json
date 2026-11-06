@@ -74,5 +74,15 @@
     "hydraulic": "REPAIR FIRST: hydraulic service before callout, else hold (will fail mid-route)",
     "watch": "DEPLOY, inspect first: near a failure threshold",
     "ok": "DEPLOY"
-  }
+  },
+  "ui_presets": [
+    {
+      "name": "4:30 pm bulletin (-14 C, 20 cm, callout 02:00)",
+      "weather_file": "config/weather/tonight.json"
+    },
+    {
+      "name": "9:30 pm update (-19 C, 27.5 cm, callout 00:30)",
+      "weather_file": "config/weather/update_2130.json"
+    }
+  ]
 }

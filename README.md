@@ -11,6 +11,7 @@ python -m stormtwin replay --input replay/input.json --output replay/output.json
 python -m stormtwin whatif --report reports/tonight_baseline.md        # 4. tonight, bulletin weather (+ one-page report)
 python -m stormtwin whatif --weather config/weather/update_2130.json --callout 2026-12-16T00:30:00 --report reports/update_2130_baseline.md   # 2:15 forecast update: new JSON file, no code change
 python -m stormtwin whatif --scenario scenarios/fix_priority_trucks.json  # repair what-if vs baseline
+python -m stormtwin ui                                                  # optional: reports/dashboard.html, sliders + repair checkboxes (same rules)
 python -m pytest -q
 ```
 

@@ -162,6 +162,19 @@ def cmd_whatif(a, cfg):
         print(f"report written: {a.report}")
 
 
+def cmd_ui(a, cfg):
+    from . import ui
+    presets = []
+    for p in cfg.get("ui_presets", []):
+        w = load_json(ROOT / p["weather_file"])
+        presets.append({"name": p["name"], "callout_local": w.get("callout_local") or p.get("callout_local") or cfg["tonight"]["callout_local"],
+                        "weather": w})
+    html = ui.build(load_raw(cfg), cfg, presets)
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(a.out).write_text(html, encoding="utf-8")
+    print(f"dashboard written: {a.out}  (open it in a browser)")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="stormtwin")
     ap.add_argument("--config", default=str(ROOT / "config" / "settings.json"))
@@ -178,13 +191,15 @@ def main(argv=None):
     wp.add_argument("--callout", help="callout local time (default from config)")
     wp.add_argument("--out", help="write full JSON result here")
     wp.add_argument("--report", help="write a one-page Markdown report here")
+    up = sub.add_parser("ui", help="write a single-file HTML dashboard for the live what-if")
+    up.add_argument("--out", default=str(ROOT / "reports" / "dashboard.html"))
     a = ap.parse_args(argv)
     cfg = load_json(a.config)
     if a.cmd == "fetch":
         from . import fetch
         fetch.run(cfg, ROOT)
     else:
-        {"replay": cmd_replay, "backtest": cmd_backtest, "whatif": cmd_whatif}[a.cmd](a, cfg)
+        {"replay": cmd_replay, "backtest": cmd_backtest, "whatif": cmd_whatif, "ui": cmd_ui}[a.cmd](a, cfg)
 
 
 if __name__ == "__main__":
